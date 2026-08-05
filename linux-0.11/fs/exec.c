@@ -270,6 +270,8 @@ int do_execve(char * filename, char ** argv, char ** envp)
 			continue;
 		if (ph.p_vaddr < current->start_code)
 			current->start_code = ph.p_vaddr;
+		if (ph.p_vaddr + ph.p_memsz > current->end_code)
+			current->end_code = ph.p_vaddr + ph.p_memsz;
 		if (ph.p_vaddr + ph.p_memsz > current->end_data) {
 			current->end_data = ph.p_vaddr + ph.p_memsz;
 			current->brk = current->end_data;

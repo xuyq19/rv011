@@ -30,7 +30,8 @@ static inline int clear_bit(int nr, void * addr)
 	char * p = (char *) addr + (nr >> 3);
 	int old = (*p & mask) != 0;
 	*p &= ~mask;
-	return old;
+	/* x86 btrl+setnb semantics: return 1 if the bit was already clear */
+	return old ? 0 : 1;
 }
 
 static inline int find_first_zero(char * addr)

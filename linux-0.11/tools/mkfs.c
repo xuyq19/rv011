@@ -190,7 +190,7 @@ int main(int argc, char ** argv)
 	unsigned char * data;
 	long size;
 	FILE * f;
-	int root, bin, dev, sh_ino = 0, hello_ino = 0, tty_ino, i;
+	int root, bin, dev, tty_ino, i;
 
 	if (argc < 4) {
 		fprintf(stderr, "usage: %s image file1 file2 ...\n", argv[0]);
@@ -217,7 +217,9 @@ int main(int argc, char ** argv)
 	add_dir_entry(&inodes[root - 1], dev, "dev");
 
 	for (i = 2; i < argc; i++) {
-		const char * base;
+		const char * base, * dot;
+		char name[16];
+		int f_ino;
 		if (!(f = fopen(argv[i], "rb"))) {
 			perror(argv[i]);
 			return 1;
@@ -233,19 +235,24 @@ int main(int argc, char ** argv)
 		fclose(f);
 		base = strrchr(argv[i], '/');
 		base = base ? base + 1 : argv[i];
-		if (!strcmp(base, "sh.elf"))
-			sh_ino = add_file(argv[i], 0100755, data, size);
-		else if (!strcmp(base, "hello.elf"))
-			hello_ino = add_file(argv[i], 0100755, data, size);
-		else {
-			fprintf(stderr, "mkfs: unknown file %s\n", argv[i]);
+		dot = strrchr(base, '.');
+		if (!dot || strcmp(dot, ".elf") != 0 ||
+		    (int) (dot - base) > 14) {
+			fprintf(stderr, "mkfs: bad file %s\n", argv[i]);
 			return 1;
 		}
+		memcpy(name, base, dot - base);
+		name[dot - base] = 0;
+		if (!strcmp(name, "sh"))
+			f_ino = add_file(argv[i], 0100755, data, size);
+		else if (!strcmp(name, "hello"))
+			f_ino = add_file(argv[i], 0100755, data, size);
+		else
+			f_ino = add_file(argv[i], 0100755, data, size);
+		add_dir_entry(&inodes[bin - 1], f_ino, name);
 		free(data);
 	}
 	tty_ino = add_dev("tty0", 0x0400);	/* char dev major 4 minor 0 */
-	add_dir_entry(&inodes[bin - 1], sh_ino, "sh");
-	add_dir_entry(&inodes[bin - 1], hello_ino, "hello");
 	add_dir_entry(&inodes[dev - 1], tty_ino, "tty0");
 
 	if (!(f = fopen(argv[1], "wb"))) {

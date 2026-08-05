@@ -68,12 +68,49 @@ user/sh.elf: user/crt0.o user/sh.o $(USER_LIBS)
 user/hello.elf: user/crt0.o user/hello.o $(USER_LIBS)
 	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
 
+user/t_hello.elf: user/crt0.o user/t_hello.o $(USER_LIBS)
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+
+# test programs: inline syscall wrappers, so no lib stubs except
+# _exit/errno; uprint for printing; sigrestore for the signal test.
+TESTS = t_fork t_cow t_fs t_pipe t_sched t_stress
+TLIBS = user/crt0.o user/uprint.o lib/_exit.o lib/errno.o
+
+user/t_fork.elf: user/crt0.o user/t_fork.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_cow.elf: user/crt0.o user/t_cow.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_fs.elf: user/crt0.o user/t_fs.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_pipe.elf: user/crt0.o user/t_pipe.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_sig.elf: user/crt0.o user/t_sig.o user/uprint.o user/sigrestore.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_sched.elf: user/crt0.o user/t_sched.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_stress.elf: user/crt0.o user/t_stress.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+user/t_up.elf: user/crt0.o user/t_up.o user/uprint.o \
+		lib/_exit.o lib/errno.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+
 # ---- root filesystem (minix v1) ----
 tools/mkfs: tools/mkfs.c
 	gcc -O2 -Wall -o $@ $<
 
-rootfs.img: user/sh.elf user/hello.elf tools/mkfs
-	tools/mkfs rootfs.img user/sh.elf user/hello.elf
+ROOTFS_PROGS = user/sh.elf user/hello.elf user/t_hello.elf \
+	user/t_fork.elf user/t_cow.elf user/t_fs.elf user/t_pipe.elf \
+	user/t_sig.elf user/t_sched.elf user/t_stress.elf user/t_up.elf
+
+rootfs.img: $(ROOTFS_PROGS) tools/mkfs
+	tools/mkfs rootfs.img $(ROOTFS_PROGS)
 
 rootfs.S: rootfs.img
 	printf '.section .rootfs,"a",@progbits\n.globl _binary_rootfs_img_start\n_binary_rootfs_img_start:\n.incbin "rootfs.img"\n.globl _binary_rootfs_img_end\n_binary_rootfs_img_end:\n' > $@
@@ -87,6 +124,13 @@ run: kernel.elf
 
 clean:
 	rm -f $(KOBJS) rootfs.o kernel.elf rootfs.img user/sh.o user/hello.o \
-		user/crt0.o user/sh.elf user/hello.elf tools/mkfs rootfs.S
+		user/crt0.o user/sh.elf user/hello.elf tools/mkfs rootfs.S \
+		user/uprint.o user/sigrestore.o user/t_hello.o \
+		user/t_fork.o user/t_cow.o user/t_fs.o user/t_pipe.o \
+		user/t_sig.o user/t_sched.o user/t_stress.o \
+		user/t_hello.elf user/t_fork.elf user/t_cow.elf \
+		user/t_fs.elf user/t_pipe.elf user/t_sig.elf \
+		user/t_sched.elf user/t_stress.elf user/t_up.elf \
+		user/t_up.o
 
 .PHONY: all run clean

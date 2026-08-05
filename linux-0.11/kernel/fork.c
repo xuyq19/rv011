@@ -55,7 +55,7 @@ int copy_process(int nr)
 	tf = (struct trapframe *)((char *) p + PAGE_SIZE - TF_SIZE);
 	memcpy(tf, ptf, TF_SIZE);
 	tf->a0 = 0;		/* a0 = 0 */
-	tf->mepc += 4;		/* skip the ecall */
+	/* trap_handler already advanced mepc past the ecall */
 	tf->from_user = 1;
 	p->kctx.ra = (long) ret_from_trap;
 	p->kctx.sp = (long) tf;

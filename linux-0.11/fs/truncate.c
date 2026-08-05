@@ -62,4 +62,3 @@ void truncate(struct m_inode * inode)
 	inode->i_dirt = 1;
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME;
 }
-

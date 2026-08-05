@@ -22,7 +22,7 @@ int open(const char * filename, int flag, ...)
 
 		__asm__ volatile ("ecall"
 			: "+r" (__a7), "+r" (__a0), "+r" (__a1), "+r" (__a2)
-			:: "memory");
+			:: "memory", "t0", "t1");
 		res = (int) __a0;
 	}
 	va_end(arg);

@@ -27,6 +27,11 @@ static inline int set_bit(int bitnr, char * addr)
 	return old;
 }
 
+static inline int test_bit(int bitnr, char * addr)
+{
+	return (addr[bitnr >> 3] >> (bitnr & 7)) & 1;
+}
+
 struct super_block super_block[NR_SUPER];
 /* this is initialized in init/main.c */
 int ROOT_DEV = 0;
@@ -272,13 +277,13 @@ void mount_root(void)
 	free=0;
 	i=p->s_nzones;
 	while (-- i >= 0)
-		if (!set_bit(i&8191,p->s_zmap[i>>13]->b_data))
+		if (!test_bit(i&8191,p->s_zmap[i>>13]->b_data))
 			free++;
 	printk("%d/%d free blocks\n\r",free,p->s_nzones);
 	free=0;
 	i=p->s_ninodes+1;
 	while (-- i >= 0)
-		if (!set_bit(i&8191,p->s_imap[i>>13]->b_data))
+		if (!test_bit(i&8191,p->s_imap[i>>13]->b_data))
 			free++;
 	printk("%d/%d free inodes\n\r",free,p->s_ninodes);
 }

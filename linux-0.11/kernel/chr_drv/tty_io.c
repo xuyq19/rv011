@@ -283,8 +283,11 @@ int tty_write(unsigned channel, char * buf, int nr)
 	tty = channel + tty_table;
 	while (nr>0) {
 		sleep_if_full(&tty->write_q);
-		if (current->signal)
+		if (current->signal) {
+			printk("tty_write: pid=%d signal=%lx blocked=%lx\n\r",
+				current->pid, current->signal, current->blocked);
 			break;
+		}
 		while (nr>0 && !FULL(tty->write_q)) {
 			c=get_fs_byte(b);
 			if (O_POST(tty)) {

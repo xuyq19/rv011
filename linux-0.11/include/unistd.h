@@ -55,6 +55,8 @@
 #include <sys/utsname.h>
 #include <utime.h>
 
+extern int errno;
+
 #ifdef __LIBRARY__
 
 #define __NR_setup	0	/* used only by init, to get system going */
@@ -138,7 +140,8 @@ type name(void) \
 long __res; \
 register long __a7 __asm__("a7") = __NR_##name; \
 register long __a0 __asm__("a0"); \
-__asm__ volatile ("ecall" : "+r" (__a7), "=r" (__a0) :: "memory"); \
+__asm__ volatile ("ecall" : "+r" (__a7), "=r" (__a0) \
+	:: "memory", "t0", "t1"); \
 __res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
@@ -152,7 +155,8 @@ type name(atype a) \
 long __res; \
 register long __a7 __asm__("a7") = __NR_##name; \
 register long __a0 __asm__("a0") = (long)(a); \
-__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0) :: "memory"); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0) \
+	:: "memory", "t0", "t1"); \
 __res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
@@ -167,7 +171,8 @@ long __res; \
 register long __a7 __asm__("a7") = __NR_##name; \
 register long __a0 __asm__("a0") = (long)(a); \
 register long __a1 __asm__("a1") = (long)(b); \
-__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1) :: "memory"); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1) \
+	:: "memory", "t0", "t1"); \
 __res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
@@ -183,7 +188,8 @@ register long __a7 __asm__("a7") = __NR_##name; \
 register long __a0 __asm__("a0") = (long)(a); \
 register long __a1 __asm__("a1") = (long)(b); \
 register long __a2 __asm__("a2") = (long)(c); \
-__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1), "+r" (__a2) :: "memory"); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1), "+r" (__a2) \
+	:: "memory", "t0", "t1"); \
 __res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
@@ -193,7 +199,7 @@ return -1; \
 
 #endif /* __LIBRARY__ */
 
-extern int errno;
+#ifndef __LIBRARY__
 
 int access(const char * filename, mode_t mode);
 int acct(const char * filename);
@@ -260,3 +266,5 @@ pid_t getpgrp(void);
 pid_t setsid(void);
 
 #endif
+
+#endif /* !__LIBRARY__ */

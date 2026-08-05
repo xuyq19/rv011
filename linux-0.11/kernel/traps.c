@@ -82,6 +82,7 @@ void trap_handler(struct trapframe * tf)
 
 	/* machine timer interrupt: mcause bit 31 set, code 7 */
 	if ((cause & 0x80000000) && (cause & 0xff) == 7) {
+		jiffies++;
 		CLINT_MTIMECMP = CLINT_MTIME + TIMER_INTERVAL;
 		do_timer(from_user);
 		if (from_user)
