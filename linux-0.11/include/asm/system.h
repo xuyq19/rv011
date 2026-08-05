@@ -9,6 +9,22 @@
 #define cli() __asm__ volatile ("csrci mstatus, 8" ::: "memory")
 #define nop() __asm__ volatile ("nop"::)
 
+static inline unsigned long save_flags(void)
+{
+	unsigned long mstatus;
+
+	__asm__ volatile ("csrr %0, mstatus" : "=r" (mstatus));
+	return mstatus & 8;
+}
+
+static inline void restore_flags(unsigned long f)
+{
+	if (f)
+		sti();
+	else
+		cli();
+}
+
 #define iret() __asm__ volatile ("mret"::)
 
 /* x86 compatibility no-ops: no IDT/GDT/segments on RISC-V */

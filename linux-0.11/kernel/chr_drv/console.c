@@ -45,6 +45,8 @@ void uart_puts(char * s)
 
 void con_write(struct tty_struct * tty)
 {
+	unsigned long irq = save_flags();
+
 	cli();
 	while (!EMPTY(tty->write_q)) {
 		char c;
@@ -52,7 +54,7 @@ void con_write(struct tty_struct * tty)
 		GETCH(tty->write_q, c);
 		uart_putc(c);
 	}
-	sti();
+	restore_flags(irq);
 	wake_up(&tty->write_q.proc_list);
 }
 
@@ -61,6 +63,7 @@ void con_poll(void)
 {
 	struct tty_struct * tty = &tty_table[0];
 	int c;
+	unsigned long irq = save_flags();
 
 	cli();
 	while ((c = uart_getc()) >= 0)
@@ -68,7 +71,7 @@ void con_poll(void)
 			PUTCH(c, tty->read_q);
 	if (!EMPTY(tty->read_q))
 		copy_to_cooked(tty);
-	sti();
+	restore_flags(irq);
 }
 
 void con_init(void)
