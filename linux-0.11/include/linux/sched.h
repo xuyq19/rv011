@@ -26,8 +26,8 @@
 #define NULL ((void *) 0)
 #endif
 
-extern int copy_page_tables(unsigned long from, unsigned long to, long size);
-extern int free_page_tables(unsigned long from, unsigned long size);
+extern int copy_page_tables(unsigned long from_pgdir, unsigned long to_pgdir);
+extern int free_page_tables(unsigned long pgdir);
 
 extern void sched_init(void);
 extern void schedule(void);
@@ -37,47 +37,81 @@ extern int tty_write(unsigned minor,char * buf,int count);
 
 typedef int (*fn_ptr)();
 
-struct i387_struct {
-	long	cwd;
-	long	swd;
-	long	twd;
-	long	fip;
-	long	fcs;
-	long	foo;
-	long	fos;
-	long	st_space[20];	/* 8*10 bytes for each FP-reg = 80 bytes */
+/*
+ * RISC-V port: software task context (callee-saved registers).
+ * Offsets are hardcoded in kernel/trap.S - keep in sync.
+ */
+struct kernel_context {
+	long ra;		/* 0 */
+	long sp;		/* 4 */
+	long s0;		/* 8 */
+	long s1;		/* 12 */
+	long s2;		/* 16 */
+	long s3;		/* 20 */
+	long s4;		/* 24 */
+	long s5;		/* 28 */
+	long s6;		/* 32 */
+	long s7;		/* 36 */
+	long s8;		/* 40 */
+	long s9;		/* 44 */
+	long s10;		/* 48 */
+	long s11;		/* 52 */
 };
 
-struct tss_struct {
-	long	back_link;	/* 16 high bits zero */
-	long	esp0;
-	long	ss0;		/* 16 high bits zero */
-	long	esp1;
-	long	ss1;		/* 16 high bits zero */
-	long	esp2;
-	long	ss2;		/* 16 high bits zero */
-	long	cr3;
-	long	eip;
-	long	eflags;
-	long	eax,ecx,edx,ebx;
-	long	esp;
-	long	ebp;
-	long	esi;
-	long	edi;
-	long	es;		/* 16 high bits zero */
-	long	cs;		/* 16 high bits zero */
-	long	ss;		/* 16 high bits zero */
-	long	ds;		/* 16 high bits zero */
-	long	fs;		/* 16 high bits zero */
-	long	gs;		/* 16 high bits zero */
-	long	ldt;		/* 16 high bits zero */
-	long	trace_bitmap;	/* bits: trace 0, bitmap 16-31 */
-	struct i387_struct i387;
+/* trap frame layout - keep in sync with kernel/trap.S */
+#define TF_MSTATUS 0
+#define TF_MEPC 4
+#define TF_X1 8
+#define TF_X2 12
+#define TF_X10 44
+#define TF_X17 72
+#define TF_MCAUSE 132
+#define TF_FROMUSER 136
+#define TF_SIZE 140
+
+struct trapframe {
+	unsigned long mstatus;	/* 0 */
+	unsigned long mepc;	/* 4 */
+	unsigned long ra;	/* 8  x1 */
+	unsigned long sp;	/* 12 x2 */
+	unsigned long gp;	/* 16 x3 */
+	unsigned long tp;	/* 20 x4 */
+	unsigned long t0;	/* 24 x5 */
+	unsigned long t1;	/* 28 x6 */
+	unsigned long t2;	/* 32 x7 */
+	unsigned long s0;	/* 36 x8 */
+	unsigned long s1;	/* 40 x9 */
+	unsigned long a0;	/* 44 x10 */
+	unsigned long a1;	/* 48 x11 */
+	unsigned long a2;	/* 52 x12 */
+	unsigned long a3;	/* 56 x13 */
+	unsigned long a4;	/* 60 x14 */
+	unsigned long a5;	/* 64 x15 */
+	unsigned long a6;	/* 68 x16 */
+	unsigned long a7;	/* 72 x17 */
+	unsigned long s2;	/* 76 x18 */
+	unsigned long s3;	/* 80 x19 */
+	unsigned long s4;	/* 84 x20 */
+	unsigned long s5;	/* 88 x21 */
+	unsigned long s6;	/* 92 x22 */
+	unsigned long s7;	/* 96 x23 */
+	unsigned long s8;	/* 100 x24 */
+	unsigned long s9;	/* 104 x25 */
+	unsigned long s10;	/* 108 x26 */
+	unsigned long s11;	/* 112 x27 */
+	unsigned long t3;	/* 116 x28 */
+	unsigned long t4;	/* 120 x29 */
+	unsigned long t5;	/* 124 x30 */
+	unsigned long t6;	/* 128 x31 */
+	unsigned long mcause;	/* 132 */
+	unsigned long from_user;/* 136 */
 };
 
 struct task_struct {
 /* these are hardcoded - don't touch */
-	long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
+	struct kernel_context kctx;	/* offset 0, used by switch_to */
+	unsigned long pgdir;		/* offset 56: user page directory */
+	long state;			/* -1 unrunnable, 0 runnable, >0 stopped */
 	long counter;
 	long priority;
 	long signal;
@@ -100,18 +134,15 @@ struct task_struct {
 	struct m_inode * executable;
 	unsigned long close_on_exec;
 	struct file * filp[NR_OPEN];
-/* ldt for this task 0 - zero 1 - cs 2 - ds&ss */
-	struct desc_struct ldt[3];
-/* tss for this task */
-	struct tss_struct tss;
 };
 
 /*
- *  INIT_TASK is used to set up the first task table, touch at
- * your own risk!. Base=0, limit=0x9ffff (=640kB)
+ * INIT_TASK is used to set up the first task table. Task 0 is the idle
+ * task; it never runs user code, so pgdir is 0 and kctx is zeroed.
  */
 #define INIT_TASK \
-/* state etc */	{ 0,15,15, \
+/* kctx, pgdir */	{ {0,}, 0, \
+/* state etc */	0,15,15, \
 /* signals */	0,{{},},0, \
 /* ec,brk... */	0,0,0,0,0,0, \
 /* pid etc.. */	0,-1,0,0,0, \
@@ -120,17 +151,6 @@ struct task_struct {
 /* math */	0, \
 /* fs info */	-1,0022,NULL,NULL,NULL,0, \
 /* filp */	{NULL,}, \
-	{ \
-		{0,0}, \
-/* ldt */	{0x9f,0xc0fa00}, \
-		{0x9f,0xc0f200}, \
-	}, \
-/*tss*/	{0,PAGE_SIZE+(long)&init_task,0x10,0,0,0,0,(long)&pg_dir,\
-	 0,0,0,0,0,0,0,0, \
-	 0,0,0x17,0x17,0x17,0x17,0x17,0x17, \
-	 _LDT(0),0x80000000, \
-		{} \
-	}, \
 }
 
 extern struct task_struct *task[NR_TASKS];
@@ -145,89 +165,14 @@ extern void add_timer(long jiffies, void (*fn)(void));
 extern void sleep_on(struct task_struct ** p);
 extern void interruptible_sleep_on(struct task_struct ** p);
 extern void wake_up(struct task_struct ** p);
-
-/*
- * Entry into gdt where to find first TSS. 0-nul, 1-cs, 2-ds, 3-syscall
- * 4-TSS0, 5-LDT0, 6-TSS1 etc ...
- */
-#define FIRST_TSS_ENTRY 4
-#define FIRST_LDT_ENTRY (FIRST_TSS_ENTRY+1)
-#define _TSS(n) ((((unsigned long) n)<<4)+(FIRST_TSS_ENTRY<<3))
-#define _LDT(n) ((((unsigned long) n)<<4)+(FIRST_LDT_ENTRY<<3))
-#define ltr(n) __asm__("ltr %%ax"::"a" (_TSS(n)))
-#define lldt(n) __asm__("lldt %%ax"::"a" (_LDT(n)))
-#define str(n) \
-__asm__("str %%ax\n\t" \
-	"subl %2,%%eax\n\t" \
-	"shrl $4,%%eax" \
-	:"=a" (n) \
-	:"a" (0),"i" (FIRST_TSS_ENTRY<<3))
-/*
- *	switch_to(n) should switch tasks to task nr n, first
- * checking that n isn't the current task, in which case it does nothing.
- * This also clears the TS-flag if the task we switched to has used
- * tha math co-processor latest.
- */
-#define switch_to(n) {\
-struct {long a,b;} __tmp; \
-__asm__("cmpl %%ecx,_current\n\t" \
-	"je 1f\n\t" \
-	"movw %%dx,%1\n\t" \
-	"xchgl %%ecx,_current\n\t" \
-	"ljmp %0\n\t" \
-	"cmpl %%ecx,_last_task_used_math\n\t" \
-	"jne 1f\n\t" \
-	"clts\n" \
-	"1:" \
-	::"m" (*&__tmp.a),"m" (*&__tmp.b), \
-	"d" (_TSS(n)),"c" ((long) task[n])); \
-}
+extern void do_timer(long cpl);
+extern void do_signals(struct trapframe * tf);
+extern int sys_fork(void);
+extern int kernel_thread(void (*fn)(void));
+extern int sys_pause(void);
+extern void ret_from_trap(void);
+extern void switch_to(struct task_struct * next);
 
 #define PAGE_ALIGN(n) (((n)+0xfff)&0xfffff000)
-
-#define _set_base(addr,base) \
-__asm__("movw %%dx,%0\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %%dl,%1\n\t" \
-	"movb %%dh,%2" \
-	::"m" (*((addr)+2)), \
-	  "m" (*((addr)+4)), \
-	  "m" (*((addr)+7)), \
-	  "d" (base) \
-	:"dx")
-
-#define _set_limit(addr,limit) \
-__asm__("movw %%dx,%0\n\t" \
-	"rorl $16,%%edx\n\t" \
-	"movb %1,%%dh\n\t" \
-	"andb $0xf0,%%dh\n\t" \
-	"orb %%dh,%%dl\n\t" \
-	"movb %%dl,%1" \
-	::"m" (*(addr)), \
-	  "m" (*((addr)+6)), \
-	  "d" (limit) \
-	:"dx")
-
-#define set_base(ldt,base) _set_base( ((char *)&(ldt)) , base )
-#define set_limit(ldt,limit) _set_limit( ((char *)&(ldt)) , (limit-1)>>12 )
-
-#define _get_base(addr) ({\
-unsigned long __base; \
-__asm__("movb %3,%%dh\n\t" \
-	"movb %2,%%dl\n\t" \
-	"shll $16,%%edx\n\t" \
-	"movw %1,%%dx" \
-	:"=d" (__base) \
-	:"m" (*((addr)+2)), \
-	 "m" (*((addr)+4)), \
-	 "m" (*((addr)+7))); \
-__base;})
-
-#define get_base(ldt) _get_base( ((char *)&(ldt)) )
-
-#define get_limit(segment) ({ \
-unsigned long __limit; \
-__asm__("lsll %1,%0\n\tincl %0":"=r" (__limit):"r" (segment)); \
-__limit;})
 
 #endif

@@ -1,14 +1,21 @@
-/*
- *  NOTE!!! memcpy(dest,src,n) assumes ds=es=normal data segment. This
- *  goes for all kernel functions (ds=es=kernel space, fs=local data,
- *  gs=null), as well as for all well-behaving user programs (ds=es=
- *  user data space). This is NOT a bug, as any user program that changes
- *  es deserves to die if it isn't careful.
- */
+#ifndef _ASM_MEMORY_H
+#define _ASM_MEMORY_H
+
+extern inline void copy_page(unsigned long from, unsigned long to)
+{
+	unsigned long * s = (unsigned long *) from;
+	unsigned long * d = (unsigned long *) to;
+	int i;
+	for (i = 0; i < 1024; i++)
+		d[i] = s[i];
+}
+
+#ifndef memcpy
 #define memcpy(dest,src,n) ({ \
-void * _res = dest; \
-__asm__ ("cld;rep;movsb" \
-	::"D" ((long)(_res)),"S" ((long)(src)),"c" ((long) (n)) \
-	:"di","si","cx"); \
-_res; \
+	void * _res = (dest); \
+	__builtin_memcpy(_res, (src), (n)); \
+	_res; \
 })
+#endif
+
+#endif

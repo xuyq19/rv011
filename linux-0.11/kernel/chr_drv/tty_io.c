@@ -63,48 +63,32 @@ struct tty_struct tty_table[] = {
 		{0,0,0,0,""},		/* console write-queue */
 		{0,0,0,0,""}		/* console secondary queue */
 	},{
-		{0, /* no translation */
-		0,  /* no translation */
-		B2400 | CS8,
+		{ICRNL, OPOST|ONLCR, 0,
+		ISIG | ICANON | ECHO | ECHOCTL | ECHOKE,
+		0, INIT_C_CC},
 		0,
 		0,
-		INIT_C_CC},
-		0,
-		0,
-		rs_write,
-		{0x3f8,0,0,0,""},		/* rs 1 */
-		{0x3f8,0,0,0,""},
+		con_write,
+		{0,0,0,0,""},
+		{0,0,0,0,""},
 		{0,0,0,0,""}
 	},{
-		{0, /* no translation */
-		0,  /* no translation */
-		B2400 | CS8,
+		{ICRNL, OPOST|ONLCR, 0,
+		ISIG | ICANON | ECHO | ECHOCTL | ECHOKE,
+		0, INIT_C_CC},
 		0,
 		0,
-		INIT_C_CC},
-		0,
-		0,
-		rs_write,
-		{0x2f8,0,0,0,""},		/* rs 2 */
-		{0x2f8,0,0,0,""},
+		con_write,
+		{0,0,0,0,""},
+		{0,0,0,0,""},
 		{0,0,0,0,""}
 	}
 };
 
-/*
- * these are the tables used by the machine code handlers.
- * you can implement pseudo-tty's or something by changing
- * them. Currently not done.
- */
-struct tty_queue * table_list[]={
-	&tty_table[0].read_q, &tty_table[0].write_q,
-	&tty_table[1].read_q, &tty_table[1].write_q,
-	&tty_table[2].read_q, &tty_table[2].write_q
-	};
+extern void con_poll(void);
 
 void tty_init(void)
 {
-	rs_init();
 	con_init();
 }
 
@@ -121,20 +105,22 @@ void tty_intr(struct tty_struct * tty, int mask)
 
 static void sleep_if_empty(struct tty_queue * queue)
 {
-	cli();
-	while (!current->signal && EMPTY(*queue))
-		interruptible_sleep_on(&queue->proc_list);
-	sti();
+	/* Polled console: busy-wait (preemptible) instead of sleeping,
+	 * because nothing would ever wake us up. */
+	while (!current->signal && EMPTY(*queue)) {
+		con_poll();
+		schedule();
+	}
 }
 
 static void sleep_if_full(struct tty_queue * queue)
 {
 	if (!FULL(*queue))
 		return;
-	cli();
-	while (!current->signal && LEFT(*queue)<128)
-		interruptible_sleep_on(&queue->proc_list);
-	sti();
+	while (!current->signal && LEFT(*queue) < 128) {
+		con_poll();
+		schedule();
+	}
 }
 
 void wait_for_keypress(void)

@@ -1,123 +1,92 @@
+# Linux 0.11 for RISC-V (rv32) - QEMU virt, bare-metal M-mode
 #
-# if you want the ram-disk device, define this to be the
-# size in blocks.
-#
-RAMDISK = #-DRAMDISK=512
+# Tools: riscv64-unknown-elf-gcc (rv32imac/ilp32 multilib), QEMU.
 
-AS86	=as86 -0 -a
-LD86	=ld86 -0
+CROSS = riscv64-unknown-elf-
+CC = $(CROSS)gcc
+LD = $(CROSS)gcc
+OBJCOPY = $(CROSS)objcopy
 
-AS	=gas
-LD	=gld
-LDFLAGS	=-s -x -M
-CC	=gcc $(RAMDISK)
-CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer \
--fcombine-regs -mstring-insns
-CPP	=cpp -nostdinc -Iinclude
+MARCH = -march=rv32imac_zicsr_zifencei -mabi=ilp32
+KCFLAGS = -O2 -Wall -fno-pic -mno-relax -ffreestanding -fgnu89-inline \
+	-fno-builtin -nostdinc -Iinclude $(MARCH)
+LDFLAGS = -nostdlib -mno-relax $(MARCH)
 
-#
-# ROOT_DEV specifies the default root-device when making the image.
-# This can be either FLOPPY, /dev/xxxx or empty, in which case the
-# default of /dev/hd6 is used by 'build'.
-#
-ROOT_DEV=/dev/hd6
+KOBJS = \
+	boot/head.o \
+	init/main.o \
+	kernel/sched.o \
+	kernel/trap.o \
+	kernel/traps.o \
+	kernel/fork.o \
+	kernel/panic.o \
+	kernel/printk.o \
+	kernel/vsprintf.o \
+	kernel/sys.o \
+	kernel/exit.o \
+	kernel/signal.o \
+	kernel/mktime.o \
+	mm/memory.o \
+	kernel/blk_drv/ll_rw_blk.o \
+	kernel/blk_drv/ramdisk.o \
+	kernel/chr_drv/tty_io.o \
+	kernel/chr_drv/console.o \
+	kernel/chr_drv/tty_ioctl.o \
+	fs/bitmap.o fs/block_dev.o fs/buffer.o fs/char_dev.o fs/exec.o \
+	fs/fcntl.o fs/file_dev.o fs/file_table.o fs/inode.o fs/ioctl.o \
+	fs/namei.o fs/open.o fs/pipe.o fs/read_write.o fs/stat.o \
+	fs/super.o fs/truncate.o \
+	lib/ctype.o lib/_exit.o lib/open.o lib/close.o lib/errno.o \
+	lib/write.o lib/dup.o lib/setsid.o lib/execve.o lib/wait.o \
+	lib/string.o lib/malloc.o lib/pause.o lib/sync.o
 
-ARCHIVES=kernel/kernel.o mm/mm.o fs/fs.o
-DRIVERS =kernel/blk_drv/blk_drv.a kernel/chr_drv/chr_drv.a
-MATH	=kernel/math/math.a
-LIBS	=lib/lib.a
+all: kernel.elf rootfs.img
 
-.c.s:
-	$(CC) $(CFLAGS) \
-	-nostdinc -Iinclude -S -o $*.s $<
-.s.o:
-	$(AS) -c -o $*.o $<
-.c.o:
-	$(CC) $(CFLAGS) \
-	-nostdinc -Iinclude -c -o $*.o $<
+kernel.elf: $(KOBJS) rootfs.o kernel.ld
+	$(LD) $(LDFLAGS) -T kernel.ld -o $@ $(KOBJS) rootfs.o
 
-all:	Image
+%.o: %.c
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
-Image: boot/bootsect boot/setup tools/system tools/build
-	tools/build boot/bootsect boot/setup tools/system $(ROOT_DEV) > Image
-	sync
+%.o: %.S
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
-disk: Image
-	dd bs=8192 if=Image of=/dev/PS0
+%.o: %.s
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
-tools/build: tools/build.c
-	$(CC) $(CFLAGS) \
-	-o tools/build tools/build.c
+# ---- user programs ----
+UCFLAGS = $(KCFLAGS)
+USER_LIBS = lib/_exit.o lib/errno.o lib/write.o lib/read.o lib/fork.o \
+	lib/execve.o lib/wait.o
 
-boot/head.o: boot/head.s
+user/crt0.o: user/crt0.S
+	$(CC) $(UCFLAGS) -c -o $@ $<
 
-tools/system:	boot/head.o init/main.o \
-		$(ARCHIVES) $(DRIVERS) $(MATH) $(LIBS)
-	$(LD) $(LDFLAGS) boot/head.o init/main.o \
-	$(ARCHIVES) \
-	$(DRIVERS) \
-	$(MATH) \
-	$(LIBS) \
-	-o tools/system > System.map
+user/sh.elf: user/crt0.o user/sh.o $(USER_LIBS)
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
 
-kernel/math/math.a:
-	(cd kernel/math; make)
+user/hello.elf: user/crt0.o user/hello.o $(USER_LIBS)
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
 
-kernel/blk_drv/blk_drv.a:
-	(cd kernel/blk_drv; make)
+# ---- root filesystem (minix v1) ----
+tools/mkfs: tools/mkfs.c
+	gcc -O2 -Wall -o $@ $<
 
-kernel/chr_drv/chr_drv.a:
-	(cd kernel/chr_drv; make)
+rootfs.img: user/sh.elf user/hello.elf tools/mkfs
+	tools/mkfs rootfs.img user/sh.elf user/hello.elf
 
-kernel/kernel.o:
-	(cd kernel; make)
+rootfs.S: rootfs.img
+	printf '.section .rootfs,"a",@progbits\n.globl _binary_rootfs_img_start\n_binary_rootfs_img_start:\n.incbin "rootfs.img"\n.globl _binary_rootfs_img_end\n_binary_rootfs_img_end:\n' > $@
 
-mm/mm.o:
-	(cd mm; make)
+rootfs.o: rootfs.S
+	$(CC) $(KCFLAGS) -c -o $@ $<
 
-fs/fs.o:
-	(cd fs; make)
-
-lib/lib.a:
-	(cd lib; make)
-
-boot/setup: boot/setup.s
-	$(AS86) -o boot/setup.o boot/setup.s
-	$(LD86) -s -o boot/setup boot/setup.o
-
-boot/bootsect:	boot/bootsect.s
-	$(AS86) -o boot/bootsect.o boot/bootsect.s
-	$(LD86) -s -o boot/bootsect boot/bootsect.o
-
-tmp.s:	boot/bootsect.s tools/system
-	(echo -n "SYSSIZE = (";ls -l tools/system | grep system \
-		| cut -c25-31 | tr '\012' ' '; echo "+ 15 ) / 16") > tmp.s
-	cat boot/bootsect.s >> tmp.s
+run: kernel.elf
+	qemu-system-riscv32 -M virt -m 128M -bios none -kernel kernel.elf \
+		-nographic -no-reboot
 
 clean:
-	rm -f Image System.map tmp_make core boot/bootsect boot/setup
-	rm -f init/*.o tools/system tools/build boot/*.o
-	(cd mm;make clean)
-	(cd fs;make clean)
-	(cd kernel;make clean)
-	(cd lib;make clean)
+	rm -f $(KOBJS) rootfs.o kernel.elf rootfs.img user/sh.o user/hello.o \
+		user/crt0.o user/sh.elf user/hello.elf tools/mkfs rootfs.S
 
-backup: clean
-	(cd .. ; tar cf - linux | compress - > backup.Z)
-	sync
-
-dep:
-	sed '/\#\#\# Dependencies/q' < Makefile > tmp_make
-	(for i in init/*.c;do echo -n "init/";$(CPP) -M $$i;done) >> tmp_make
-	cp tmp_make Makefile
-	(cd fs; make dep)
-	(cd kernel; make dep)
-	(cd mm; make dep)
-
-### Dependencies:
-init/main.o : init/main.c include/unistd.h include/sys/stat.h \
-  include/sys/types.h include/sys/times.h include/sys/utsname.h \
-  include/utime.h include/time.h include/linux/tty.h include/termios.h \
-  include/linux/sched.h include/linux/head.h include/linux/fs.h \
-  include/linux/mm.h include/signal.h include/asm/system.h include/asm/io.h \
-  include/stddef.h include/stdarg.h include/fcntl.h 
+.PHONY: all run clean

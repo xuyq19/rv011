@@ -25,6 +25,7 @@
 #include <linux/kernel.h>
 #include <asm/system.h>
 #include <asm/io.h>
+#include <string.h>
 
 extern int end;
 struct buffer_head * start_buffer = (struct buffer_head *) &end;
@@ -116,8 +117,6 @@ void check_disk_change(int dev)
 
 	if (MAJOR(dev) != 2)
 		return;
-	if (!floppy_change(dev & 0x03))
-		return;
 	for (i=0 ; i<NR_SUPER ; i++)
 		if (super_block[i].s_dev == dev)
 			put_super(super_block[i].s_dev);
@@ -160,7 +159,8 @@ static inline void insert_into_queues(struct buffer_head * bh)
 		return;
 	bh->b_next = hash(bh->b_dev,bh->b_blocknr);
 	hash(bh->b_dev,bh->b_blocknr) = bh;
-	bh->b_next->b_prev = bh;
+	if (bh->b_next)		/* RISC-V port: guard NULL (x86 mapped page 0) */
+		bh->b_next->b_prev = bh;
 }
 
 static struct buffer_head * find_buffer(int dev, int block)
@@ -280,12 +280,7 @@ struct buffer_head * bread(int dev,int block)
 	return NULL;
 }
 
-#define COPYBLK(from,to) \
-__asm__("cld\n\t" \
-	"rep\n\t" \
-	"movsl\n\t" \
-	::"c" (BLOCK_SIZE/4),"S" (from),"D" (to) \
-	:"cx","di","si")
+#define COPYBLK(from,to) memcpy((char *)(to),(char *)(from),BLOCK_SIZE)
 
 /*
  * bread_page reads four buffers into memory at the desired address. It's

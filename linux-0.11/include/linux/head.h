@@ -1,20 +1,26 @@
 #ifndef _HEAD_H
 #define _HEAD_H
 
-typedef struct desc_struct {
-	unsigned long a,b;
-} desc_table[256];
+/*
+ * RISC-V port: QEMU "virt" machine constants.
+ * The kernel runs in M-mode; addresses are physical.
+ */
 
-extern unsigned long pg_dir[1024];
-extern desc_table idt,gdt;
+#define RAM_BASE        0x80000000UL
+#define RAM_SIZE        (128*1024*1024)
+#define RAM_END         (RAM_BASE + RAM_SIZE)
 
-#define GDT_NUL 0
-#define GDT_CODE 1
-#define GDT_DATA 2
-#define GDT_TMP 3
+#define UART_BASE       0x10000000UL
 
-#define LDT_NUL 0
-#define LDT_CODE 1
-#define LDT_DATA 2
+#define CLINT_BASE      0x02000000UL
+#define CLINT_MTIME     (*(volatile unsigned long *)(CLINT_BASE + 0xBFF8))
+#define CLINT_MTIMECMP  (*(volatile unsigned long *)(CLINT_BASE + 0x4000))
+#define CLINT_TIMEBASE  10000000UL
+
+#define USER_LIMIT      0x80000000UL   /* top of user virtual address space */
+
+extern char _bss_start[];
+extern char _bss_end[];
+extern char _kernel_end[];
 
 #endif

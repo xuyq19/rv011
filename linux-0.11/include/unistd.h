@@ -129,14 +129,17 @@
 #define __NR_ssetmask	69
 #define __NR_setreuid	70
 #define __NR_setregid	71
+#define __NR_sigreturn	72
 
+/* RISC-V syscall ABI: number in a7, args a0-a2, result in a0 */
 #define _syscall0(type,name) \
 type name(void) \
 { \
 long __res; \
-__asm__ volatile ("int $0x80" \
-	: "=a" (__res) \
-	: "0" (__NR_##name)); \
+register long __a7 __asm__("a7") = __NR_##name; \
+register long __a0 __asm__("a0"); \
+__asm__ volatile ("ecall" : "+r" (__a7), "=r" (__a0) :: "memory"); \
+__res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
 errno = -__res; \
@@ -147,9 +150,10 @@ return -1; \
 type name(atype a) \
 { \
 long __res; \
-__asm__ volatile ("int $0x80" \
-	: "=a" (__res) \
-	: "0" (__NR_##name),"b" ((long)(a))); \
+register long __a7 __asm__("a7") = __NR_##name; \
+register long __a0 __asm__("a0") = (long)(a); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0) :: "memory"); \
+__res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
 errno = -__res; \
@@ -160,9 +164,11 @@ return -1; \
 type name(atype a,btype b) \
 { \
 long __res; \
-__asm__ volatile ("int $0x80" \
-	: "=a" (__res) \
-	: "0" (__NR_##name),"b" ((long)(a)),"c" ((long)(b))); \
+register long __a7 __asm__("a7") = __NR_##name; \
+register long __a0 __asm__("a0") = (long)(a); \
+register long __a1 __asm__("a1") = (long)(b); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1) :: "memory"); \
+__res = __a0; \
 if (__res >= 0) \
 	return (type) __res; \
 errno = -__res; \
@@ -173,12 +179,15 @@ return -1; \
 type name(atype a,btype b,ctype c) \
 { \
 long __res; \
-__asm__ volatile ("int $0x80" \
-	: "=a" (__res) \
-	: "0" (__NR_##name),"b" ((long)(a)),"c" ((long)(b)),"d" ((long)(c))); \
-if (__res>=0) \
+register long __a7 __asm__("a7") = __NR_##name; \
+register long __a0 __asm__("a0") = (long)(a); \
+register long __a1 __asm__("a1") = (long)(b); \
+register long __a2 __asm__("a2") = (long)(c); \
+__asm__ volatile ("ecall" : "+r" (__a7), "+r" (__a0), "+r" (__a1), "+r" (__a2) :: "memory"); \
+__res = __a0; \
+if (__res >= 0) \
 	return (type) __res; \
-errno=-__res; \
+errno = -__res; \
 return -1; \
 }
 

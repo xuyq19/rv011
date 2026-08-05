@@ -1,7 +1,5 @@
 /*
- *  linux/kernel/signal.c
- *
- *  (C) 1991  Linus Torvalds
+ *  linux/kernel/signal.c - RISC-V port
  */
 
 #include <linux/sched.h>
@@ -79,41 +77,70 @@ int sys_sigaction(int signum, const struct sigaction * action,
 	return 0;
 }
 
-void do_signal(long signr,long eax, long ebx, long ecx, long edx,
-	long fs, long es, long ds,
-	long eip, long cs, long eflags,
-	unsigned long * esp, long ss)
-{
-	unsigned long sa_handler;
-	long old_eip=eip;
-	struct sigaction * sa = current->sigaction + signr - 1;
-	int longs;
-	unsigned long * tmp_esp;
+static void do_signal(struct trapframe * tf, long signr);
 
-	sa_handler = (unsigned long) sa->sa_handler;
-	if (sa_handler==1)
+/* deliver the first pending, unblocked signal */
+void do_signals(struct trapframe * tf)
+{
+	long sig, pending;
+
+	if (!current->signal)
+		return;
+	pending = current->signal & ~current->blocked;
+	if (!pending)
+		return;
+	sig = 1;
+	while (!(pending & 1)) {
+		pending >>= 1;
+		sig++;
+	}
+	current->signal &= ~(1 << (sig - 1));
+	do_signal(tf, sig);
+}
+
+static void do_signal(struct trapframe * tf, long signr)
+{
+	struct sigaction * sa = current->sigaction + signr - 1;
+	unsigned long sa_handler = (unsigned long) sa->sa_handler;
+	unsigned long old_sp, old_a0, old_pc, restorer;
+	unsigned long * sp;
+
+	if (sa_handler == 1)		/* SIG_IGN */
 		return;
 	if (!sa_handler) {
-		if (signr==SIGCHLD)
+		if (signr == SIGCHLD)
 			return;
-		else
-			do_exit(1<<(signr-1));
+		do_exit(signr);
 	}
 	if (sa->sa_flags & SA_ONESHOT)
 		sa->sa_handler = NULL;
-	*(&eip) = sa_handler;
-	longs = (sa->sa_flags & SA_NOMASK)?7:8;
-	*(&esp) -= longs;
-	verify_area(esp,longs*4);
-	tmp_esp=esp;
-	put_fs_long((long) sa->sa_restorer,tmp_esp++);
-	put_fs_long(signr,tmp_esp++);
-	if (!(sa->sa_flags & SA_NOMASK))
-		put_fs_long(current->blocked,tmp_esp++);
-	put_fs_long(eax,tmp_esp++);
-	put_fs_long(ecx,tmp_esp++);
-	put_fs_long(edx,tmp_esp++);
-	put_fs_long(eflags,tmp_esp++);
-	put_fs_long(old_eip,tmp_esp++);
+	restorer = (unsigned long) sa->sa_restorer;
+	old_sp = tf->sp;
+	old_a0 = tf->a0;
+	old_pc = tf->mepc;
+	sp = (unsigned long *)(old_sp - 20);
+	verify_area(sp, 20);
+	put_fs_long(restorer, sp + 0);
+	put_fs_long(signr, sp + 1);
+	put_fs_long(old_a0, sp + 2);
+	put_fs_long(old_pc, sp + 3);
+	put_fs_long(old_sp, sp + 4);
+	tf->sp = (unsigned long) sp;
+	tf->a0 = signr;
+	tf->ra = restorer;
+	tf->mepc = sa_handler;
 	current->blocked |= sa->sa_mask;
+}
+
+int sys_sigreturn(void)
+{
+	struct trapframe * tf;
+	unsigned long * sp;
+
+	tf = (struct trapframe *)((char *) current + PAGE_SIZE - TF_SIZE);
+	sp = (unsigned long *) tf->sp;
+	tf->a0 = get_fs_long(sp + 2);
+	tf->mepc = get_fs_long(sp + 3);
+	tf->sp = get_fs_long(sp + 4);
+	return tf->a0;
 }

@@ -32,9 +32,17 @@ static int skip_atoi(const char **s)
 #define SPECIAL	32		/* 0x */
 #define SMALL	64		/* use 'abcdef' instead of 'ABCDEF' */
 
+/*
+ * do_div(n, base): 32-bit division for rv32imac (hardware div/rem).
+ * Divides n by base, stores the quotient back into n and returns the
+ * remainder. The dividend is treated as unsigned, like the i386 divl.
+ */
 #define do_div(n,base) ({ \
 int __res; \
-__asm__("divl %4":"=a" (n),"=d" (__res):"0" (n),"1" (0),"r" (base)); \
+unsigned int __n = (unsigned int) (n); \
+unsigned int __base = (unsigned int) (base); \
+__res = (int) (__n % __base); \
+(n) = (int) (__n / __base); \
 __res; })
 
 static char * number(char * str, int num, int base, int size, int precision
