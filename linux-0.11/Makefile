@@ -102,13 +102,17 @@ user/t_up.elf: user/crt0.o user/t_up.o user/uprint.o \
 		lib/_exit.o lib/errno.o
 	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
 
+user/extprog.elf: user/extprog.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+
 # ---- root filesystem (minix v1) ----
 tools/mkfs: tools/mkfs.c
 	gcc -O2 -Wall -o $@ $<
 
 ROOTFS_PROGS = user/sh.elf user/hello.elf user/t_hello.elf \
 	user/t_fork.elf user/t_cow.elf user/t_fs.elf user/t_pipe.elf \
-	user/t_sig.elf user/t_sched.elf user/t_stress.elf user/t_up.elf
+	user/t_sig.elf user/t_sched.elf user/t_stress.elf user/t_up.elf \
+	user/extprog.elf
 
 rootfs.img: $(ROOTFS_PROGS) tools/mkfs
 	tools/mkfs rootfs.img $(ROOTFS_PROGS)
