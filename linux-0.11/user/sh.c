@@ -161,7 +161,7 @@ int main(void)
 			if (!*argv[0])
 				;
 			else if (!strcmp(argv[0], "exit"))
-				return 0;
+				goto logout;
 			else if (!strcmp(argv[0], "cd")) {
 				if (do_cd(argv[1]) < 0)
 					wstr("cd: no such directory\n");
@@ -197,6 +197,7 @@ int main(void)
 				line = next + 1;
 		} while (next);
 	}
+logout:
 	wstr("logout\n");
 	return 0;
 }

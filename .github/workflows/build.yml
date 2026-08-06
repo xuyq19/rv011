@@ -50,11 +50,12 @@ jobs:
       - name: Smoke test (boot -> shell -> t_up -> exit)
         working-directory: linux-0.11
         run: |
-          set -o pipefail
+          # QEMU never exits by itself (init respawns the shell), so the
+          # pipe exit code is not meaningful; assert on the captured log.
           ( sleep 8; printf 't_up\n'; sleep 3; printf 'exit\n'; sleep 3 ) \
             | timeout 25 qemu-system-riscv32 -M virt -m 128M -bios none \
                 -kernel kernel.elf -nographic -monitor none -serial stdio 2>&1 \
-            | tee /tmp/boot.log
+            | tee /tmp/boot.log || true
           grep -q "fork test pid=" /tmp/boot.log
           grep -q "done" /tmp/boot.log
           grep -q "logout" /tmp/boot.log
