@@ -1,0 +1,76 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install RISC-V toolchain (rv32 multilib)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf || true
+          if ! command -v riscv64-unknown-elf-gcc >/dev/null 2>&1; then
+            echo "apt toolchain unavailable, downloading prebuilt release..."
+            curl -sL -o /tmp/rel.json \
+              https://api.github.com/repos/riscv-collab/riscv-gnu-toolchain/releases/latest
+            url=$(jq -r '.assets[] | select(.name | contains("riscv64-unknown-elf-toolchain")) |
+                         select(.name | endswith(".tar.xz")) | .browser_download_url' \
+              /tmp/rel.json | head -1)
+            curl -sL -o /tmp/tc.tar.xz "$url"
+            sudo mkdir -p /opt/riscv
+            sudo tar -xJf /tmp/tc.tar.xz -C /opt/riscv --strip-components=1
+            echo "/opt/riscv/bin" >> "$GITHUB_PATH"
+          fi
+          riscv64-unknown-elf-gcc --version | head -1
+
+      - name: Verify rv32 target works
+        run: |
+          echo 'int main(void){return 0;}' > /tmp/t.c
+          riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei \
+            -mabi=ilp32 -c /tmp/t.c -o /tmp/t.o
+          file /tmp/t.o
+
+      - name: Build kernel
+        working-directory: linux-0.11
+        run: make -j2
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get install -y qemu-system-misc
+          qemu-system-riscv32 --version | head -1
+
+      - name: Smoke test (boot -> shell -> t_up -> exit)
+        working-directory: linux-0.11
+        run: |
+          ( sleep 8; printf 't_up\n'; sleep 3; printf 'exit\n'; sleep 3 ) \
+            | timeout 25 qemu-system-riscv32 -M virt -m 128M -bios none \
+                -kernel kernel.elf -nographic -monitor none -serial stdio 2>&1 \
+            | tee /tmp/boot.log || true
+          grep -q "fork test pid=" /tmp/boot.log
+          grep -q "done" /tmp/boot.log
+          grep -q "logout" /tmp/boot.log
+          echo "SMOKE TEST OK"
+
+      - name: Package artifacts
+        working-directory: linux-0.11
+        run: |
+          tar -czf ../rv011-${{ github.ref_name }}.tar.gz \
+            kernel.elf rootfs.img user/*.elf
+          (cd .. && sha256sum rv011-${{ github.ref_name }}.tar.gz) > ../SHA256SUMS
+          ls -la ../rv011-${{ github.ref_name }}.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            rv011-${{ github.ref_name }}.tar.gz
+            SHA256SUMS
+          generate_release_notes: true
