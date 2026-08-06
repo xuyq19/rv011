@@ -60,7 +60,9 @@
 .equ TF_X31,      128
 .equ TF_MCAUSE,   132
 .equ TF_FROMUSER, 136
-.equ TF_SIZE,     140
+.equ TF_F0,       140
+.equ TF_FCSR,     396
+.equ TF_SIZE,     400
 
 .section .text
 .globl trap_entry
@@ -78,6 +80,11 @@ trap_entry:
 	j 2f
 1:	li t0, 0
 2:	addi sp, sp, -TF_SIZE
+	# enable FP (mstatus.FS = Dirty) before saving mstatus, so the
+	# fsw/flw context save below is legal and the saved mstatus keeps
+	# FS enabled for user mode.
+	li t1, 0x6000
+	csrs mstatus, t1
 	csrr t1, mstatus
 	sw t1, TF_MSTATUS(sp)
 	csrr t1, mepc
@@ -121,6 +128,41 @@ trap_entry:
 	sw x29, TF_X29(sp)
 	sw x30, TF_X30(sp)
 	sw x31, TF_X31(sp)
+	# save FP state (f0-f31, fcsr) with 64-bit stores; FS is Dirty.
+	fsd f0, TF_F0(sp)
+	fsd f1, TF_F0+8(sp)
+	fsd f2, TF_F0+16(sp)
+	fsd f3, TF_F0+24(sp)
+	fsd f4, TF_F0+32(sp)
+	fsd f5, TF_F0+40(sp)
+	fsd f6, TF_F0+48(sp)
+	fsd f7, TF_F0+56(sp)
+	fsd f8, TF_F0+64(sp)
+	fsd f9, TF_F0+72(sp)
+	fsd f10, TF_F0+80(sp)
+	fsd f11, TF_F0+88(sp)
+	fsd f12, TF_F0+96(sp)
+	fsd f13, TF_F0+104(sp)
+	fsd f14, TF_F0+112(sp)
+	fsd f15, TF_F0+120(sp)
+	fsd f16, TF_F0+128(sp)
+	fsd f17, TF_F0+136(sp)
+	fsd f18, TF_F0+144(sp)
+	fsd f19, TF_F0+152(sp)
+	fsd f20, TF_F0+160(sp)
+	fsd f21, TF_F0+168(sp)
+	fsd f22, TF_F0+176(sp)
+	fsd f23, TF_F0+184(sp)
+	fsd f24, TF_F0+192(sp)
+	fsd f25, TF_F0+200(sp)
+	fsd f26, TF_F0+208(sp)
+	fsd f27, TF_F0+216(sp)
+	fsd f28, TF_F0+224(sp)
+	fsd f29, TF_F0+232(sp)
+	fsd f30, TF_F0+240(sp)
+	fsd f31, TF_F0+248(sp)
+	csrr t3, fcsr		# t3 is already saved; keep t0 (from_user) intact
+	sw t3, TF_FCSR(sp)
 	csrr t1, mcause
 	sw t1, TF_MCAUSE(sp)
 	sw t0, TF_FROMUSER(sp)
@@ -188,6 +230,42 @@ ret_from_trap:
 	# restore x30/x31 from the frame
 	csrr t6, mscratch
 	addi t6, t6, -TF_SIZE
+	# restore FP state first (t6 is still the frame pointer; restoring
+	# x31 would clobber t6)
+	fld f0, TF_F0(t6)
+	fld f1, TF_F0+8(t6)
+	fld f2, TF_F0+16(t6)
+	fld f3, TF_F0+24(t6)
+	fld f4, TF_F0+32(t6)
+	fld f5, TF_F0+40(t6)
+	fld f6, TF_F0+48(t6)
+	fld f7, TF_F0+56(t6)
+	fld f8, TF_F0+64(t6)
+	fld f9, TF_F0+72(t6)
+	fld f10, TF_F0+80(t6)
+	fld f11, TF_F0+88(t6)
+	fld f12, TF_F0+96(t6)
+	fld f13, TF_F0+104(t6)
+	fld f14, TF_F0+112(t6)
+	fld f15, TF_F0+120(t6)
+	fld f16, TF_F0+128(t6)
+	fld f17, TF_F0+136(t6)
+	fld f18, TF_F0+144(t6)
+	fld f19, TF_F0+152(t6)
+	fld f20, TF_F0+160(t6)
+	fld f21, TF_F0+168(t6)
+	fld f22, TF_F0+176(t6)
+	fld f23, TF_F0+184(t6)
+	fld f24, TF_F0+192(t6)
+	fld f25, TF_F0+200(t6)
+	fld f26, TF_F0+208(t6)
+	fld f27, TF_F0+216(t6)
+	fld f28, TF_F0+224(t6)
+	fld f29, TF_F0+232(t6)
+	fld f30, TF_F0+240(t6)
+	fld f31, TF_F0+248(t6)
+	lw t0, TF_FCSR(t6)
+	csrw fcsr, t0
 	lw x30, TF_X30(t6)
 	lw x31, TF_X31(t6)
 	mret

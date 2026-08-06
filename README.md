@@ -1,9 +1,9 @@
 # rv011 — Linux 0.11 移植到 RISC-V
 
-把经典 Linux 0.11（1991）移植到 RISC-V（rv32imac）并跑在 QEMU `virt`
+把经典 Linux 0.11（1991）移植到 RISC-V（rv32imafdc）并跑在 QEMU `virt`
 机器上的实验项目。无 OpenSBI，内核在 M-mode 裸机启动；用户态 U-mode
-使用 Sv32 分页。启动后有一个带 `cd/pwd/echo/ls` 内置命令的极简 shell，
-并附带完整的功能测试与压力测试程序。
+使用 Sv32 分页，支持硬件浮点（F/D）。启动后有一个带 `cd/pwd/echo/ls`
+内置命令的极简 shell，并附带完整的功能测试与压力测试程序。
 
 ## 仓库结构
 
@@ -15,7 +15,7 @@ linux-0.11/          移植后的内核源码（boot/head.s、kernel/、mm/、fs
 
 ## 快速开始
 
-依赖：`riscv64-unknown-elf-gcc`（rv32imac_zicsr_zifencei/ilp32）、
+依赖：`riscv64-unknown-elf-gcc`（rv32imafdc_zicsr_zifencei/ilp32d）、
 `qemu-system-riscv32`。
 
 ```sh

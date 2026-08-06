@@ -1,11 +1,11 @@
 # Linux 0.11 for RISC-V (rv32) on QEMU
 
-这是一个把 Linux 0.11 移植到 RISC-V（rv32imac，M-mode 裸机）的工程，
+这是一个把 Linux 0.11 移植到 RISC-V（rv32imafdc，M-mode 裸机）的工程，
 在 QEMU `virt` 机器上从 `-bios none` 直接启动，不使用 OpenSBI/SBI。
 
 ## 构建与运行
 
-依赖：`riscv64-unknown-elf-gcc`（需 rv32imac_zicsr_zifencei/ilp32 多库）、
+依赖：`riscv64-unknown-elf-gcc`（需 rv32imafdc_zicsr_zifencei/ilp32d 多库）、
 `qemu-system-riscv32`。
 
 ```sh

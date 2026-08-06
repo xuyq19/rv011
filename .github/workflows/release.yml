@@ -34,8 +34,8 @@ jobs:
       - name: Verify rv32 target works
         run: |
           echo 'int main(void){return 0;}' > /tmp/t.c
-          riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei \
-            -mabi=ilp32 -c /tmp/t.c -o /tmp/t.o
+          riscv64-unknown-elf-gcc -march=rv32imafdc_zicsr_zifencei \
+            -mabi=ilp32d -c /tmp/t.c -o /tmp/t.o
           file /tmp/t.o
 
       - name: Build kernel

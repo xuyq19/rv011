@@ -281,7 +281,7 @@ int do_execve(char * filename, char ** argv, char ** envp)
 	/* build the user trap frame */
 	tf = (struct trapframe *)((char *) current + PAGE_SIZE - TF_SIZE);
 	memset(tf, 0, TF_SIZE);
-	tf->mstatus = 0x88;		/* MPP=0, MPIE=1, MIE=1 */
+	tf->mstatus = 0x6088;		/* MPP=0, MPIE=1, MIE=1, FS=Dirty */
 	tf->mepc = eh.e_entry;
 	tf->sp = p;			/* user sp */
 	tf->from_user = 1;

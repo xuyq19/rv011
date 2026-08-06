@@ -67,7 +67,9 @@ struct kernel_context {
 #define TF_X17 72
 #define TF_MCAUSE 132
 #define TF_FROMUSER 136
-#define TF_SIZE 140
+#define TF_F0 140
+#define TF_FCSR 396
+#define TF_SIZE 400
 
 struct trapframe {
 	unsigned long mstatus;	/* 0 */
@@ -105,6 +107,8 @@ struct trapframe {
 	unsigned long t6;	/* 128 x31 */
 	unsigned long mcause;	/* 132 */
 	unsigned long from_user;/* 136 */
+	unsigned long long f[32]; /* 140 .. 396: FP registers f0-f31 (64-bit) */
+	unsigned long fcsr;	/* 396: FP control/status */
 };
 
 struct task_struct {

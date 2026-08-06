@@ -7,7 +7,7 @@ CC = $(CROSS)gcc
 LD = $(CROSS)gcc
 OBJCOPY = $(CROSS)objcopy
 
-MARCH = -march=rv32imac_zicsr_zifencei -mabi=ilp32
+MARCH = -march=rv32imafdc_zicsr_zifencei -mabi=ilp32d
 KCFLAGS = -O2 -Wall -fno-pic -mno-relax -ffreestanding -fgnu89-inline \
 	-fno-builtin -nostdinc -Iinclude $(MARCH)
 LDFLAGS = -nostdlib -mno-relax $(MARCH)
@@ -105,6 +105,9 @@ user/t_up.elf: user/crt0.o user/t_up.o user/uprint.o \
 user/extprog.elf: user/extprog.o
 	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
 
+user/t_fp.elf: user/t_fp.o
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+
 # ---- root filesystem (minix v1) ----
 tools/mkfs: tools/mkfs.c
 	gcc -O2 -Wall -o $@ $<
@@ -112,7 +115,7 @@ tools/mkfs: tools/mkfs.c
 ROOTFS_PROGS = user/sh.elf user/hello.elf user/t_hello.elf \
 	user/t_fork.elf user/t_cow.elf user/t_fs.elf user/t_pipe.elf \
 	user/t_sig.elf user/t_sched.elf user/t_stress.elf user/t_up.elf \
-	user/extprog.elf
+	user/extprog.elf user/t_fp.elf
 
 rootfs.img: $(ROOTFS_PROGS) tools/mkfs
 	tools/mkfs rootfs.img $(ROOTFS_PROGS)
@@ -130,12 +133,13 @@ run: kernel.elf
 clean:
 	rm -f $(KOBJS) rootfs.o kernel.elf rootfs.img user/sh.o user/hello.o \
 		user/crt0.o user/sh.elf user/hello.elf tools/mkfs rootfs.S \
+		lib/*.o \
 		user/uprint.o user/sigrestore.o user/t_hello.o \
 		user/t_fork.o user/t_cow.o user/t_fs.o user/t_pipe.o \
 		user/t_sig.o user/t_sched.o user/t_stress.o \
 		user/t_hello.elf user/t_fork.elf user/t_cow.elf \
 		user/t_fs.elf user/t_pipe.elf user/t_sig.elf \
 		user/t_sched.elf user/t_stress.elf user/t_up.elf \
-		user/t_up.o
+		user/t_up.o user/t_fp.elf user/t_fp.o
 
 .PHONY: all run clean
