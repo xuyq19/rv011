@@ -53,7 +53,7 @@ struct tty_struct tty_table[] = {
 		{ICRNL,		/* change incoming CR to NL */
 		OPOST|ONLCR,	/* change outgoing NL to CRNL */
 		0,
-		ISIG | ICANON | ECHO | ECHOCTL | ECHOKE,
+		ISIG | ICANON | ECHO | ECHOE | ECHOCTL | ECHOKE,
 		0,		/* console termio */
 		INIT_C_CC},
 		0,			/* initial pgrp */
@@ -160,15 +160,27 @@ void copy_to_cooked(struct tty_struct * tty)
 				}
 				continue;
 			}
-			if (c==ERASE_CHAR(tty)) {
+			if (c==ERASE_CHAR(tty) || c==8) {	/* DEL or BS */
 				if (EMPTY(tty->secondary) ||
 				   (c=LAST(tty->secondary))==10 ||
 				   c==EOF_CHAR(tty))
 					continue;
 				if (L_ECHO(tty)) {
-					if (c<32)
+					if (L_ECHOE(tty)) {
+						/* visually remove the char */
+						PUTCH(8,tty->write_q);
+						PUTCH(32,tty->write_q);
+						PUTCH(8,tty->write_q);
+						if (c<32) {	/* ^X is two chars */
+							PUTCH(8,tty->write_q);
+							PUTCH(32,tty->write_q);
+							PUTCH(8,tty->write_q);
+						}
+					} else {
+						if (c<32)
+							PUTCH(127,tty->write_q);
 						PUTCH(127,tty->write_q);
-					PUTCH(127,tty->write_q);
+					}
 					tty->write(tty);
 				}
 				DEC(tty->secondary.head);
@@ -241,7 +253,16 @@ int tty_read(unsigned channel, char * buf, int nr)
 			break;
 		if (EMPTY(tty->secondary) || (L_CANON(tty) &&
 		!tty->secondary.data && LEFT(tty->secondary)>20)) {
-			sleep_if_empty(&tty->secondary);
+			/* Polled console: busy-wait (preemptible) for a
+			 * complete line (canonical) or any input unit,
+			 * polling the UART all the while. */
+			while (!current->signal) {
+				con_poll();
+				if (!EMPTY(tty->secondary) &&
+				    (!L_CANON(tty) || tty->secondary.data))
+					break;
+				schedule();
+			}
 			continue;
 		}
 		do {

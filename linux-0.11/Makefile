@@ -63,7 +63,8 @@ user/crt0.o: user/crt0.S
 	$(CC) $(UCFLAGS) -c -o $@ $<
 
 user/sh.elf: user/crt0.o user/sh.o $(USER_LIBS)
-	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
+	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ \
+		user/crt0.o user/sh.o lib/_exit.o lib/errno.o lib/string.o
 
 user/hello.elf: user/crt0.o user/hello.o $(USER_LIBS)
 	$(LD) $(LDFLAGS) -static -nostdlib -Wl,-e_start -o $@ $^
