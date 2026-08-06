@@ -1,0 +1,11 @@
+# 构建产物（中间文件与可执行镜像）
+*.o
+*.elf
+linux-0.11/kernel.elf
+linux-0.11/rootfs.img
+linux-0.11/rootfs.S
+linux-0.11/tools/mkfs
+
+# 编辑器/系统
+*.swp
+.DS_Store
